@@ -90,6 +90,7 @@ async function handleImageMessage(
       data.location ? `📍 ${data.location}` : null,
       data.description ? `📝 ${data.description.slice(0, 100)}${data.description.length > 100 ? '...' : ''}` : null,
       '',
+      '✏️ ข้อมูลไม่ถูกต้อง? แก้ไขได้ที่ลิงก์ด้านล่าง',
       `🔗 ${calendarLink}`,
     ].filter((l): l is string => l !== null)
 
