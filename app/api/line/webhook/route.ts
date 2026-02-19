@@ -20,9 +20,18 @@ async function downloadLineImage(messageId: string): Promise<{ base64: string; m
   return { base64, mimeType }
 }
 
+// ISO strings from OpenAI have no timezone (e.g. "2025-03-15T14:00:00")
+// Node.js treats these as UTC, causing +7hr shift when displaying Bangkok time.
+// Fix: append +07:00 so Node.js parses it as Bangkok time from the start.
+function parseBangkokTime(isoString: string): Date {
+  if (!isoString) return new Date()
+  const hasOffset = isoString.includes('+') || isoString.toUpperCase().includes('Z')
+  return new Date(hasOffset ? isoString : isoString + '+07:00')
+}
+
 function formatThaiDateTime(isoString: string): string {
   if (!isoString) return ''
-  const date = new Date(isoString)
+  const date = parseBangkokTime(isoString)
   const dateStr = date.toLocaleDateString('th-TH', {
     year: 'numeric',
     month: 'long',
@@ -75,7 +84,7 @@ async function handleImageMessage(
     const calendarLink = await createCalendarEvent(data)
 
     // 4. Reply with summary
-    const endTime = new Date(data.endDateTime).toLocaleTimeString('th-TH', {
+    const endTime = parseBangkokTime(data.endDateTime).toLocaleTimeString('th-TH', {
       hour: '2-digit',
       minute: '2-digit',
       timeZone: 'Asia/Bangkok',
