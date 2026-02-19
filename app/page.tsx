@@ -7,8 +7,7 @@ import { EventData } from '@/lib/openai'
 
 const EMPTY_EVENT: EventData = {
   title: '',
-  startDateTime: '',
-  endDateTime: '',
+  dates: [{ startDateTime: '', endDateTime: '' }],
   location: '',
   description: '',
 }
@@ -19,14 +18,14 @@ export default function Home() {
   const [eventData, setEventData] = useState<EventData | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [calendarLink, setCalendarLink] = useState('')
+  const [calendarLinks, setCalendarLinks] = useState<string[]>([])
   const [error, setError] = useState('')
 
   const handleFileSelect = (selectedFile: File, previewUrl: string) => {
     setFile(selectedFile)
     setPreview(previewUrl)
     setEventData(null)
-    setCalendarLink('')
+    setCalendarLinks([])
     setError('')
   }
 
@@ -34,7 +33,7 @@ export default function Home() {
     if (!file) return
     setLoading(true)
     setError('')
-    setCalendarLink('')
+    setCalendarLinks([])
 
     try {
       const formData = new FormData()
@@ -77,7 +76,7 @@ export default function Home() {
         throw new Error(json.error || 'เกิดข้อผิดพลาดในการบันทึกปฏิทิน')
       }
 
-      setCalendarLink(json.link)
+      setCalendarLinks(json.links)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด กรุณาลองใหม่')
     } finally {
@@ -89,15 +88,17 @@ export default function Home() {
     setFile(null)
     setPreview('')
     setEventData(null)
-    setCalendarLink('')
+    setCalendarLinks([])
     setError('')
   }
 
   const isFormValid =
     eventData &&
     eventData.title.trim() !== '' &&
-    eventData.startDateTime !== '' &&
-    eventData.endDateTime !== ''
+    eventData.dates.length > 0 &&
+    eventData.dates.every(d => d.startDateTime !== '' && d.endDateTime !== '')
+
+  const isSaved = calendarLinks.length > 0
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
@@ -131,7 +132,7 @@ export default function Home() {
               disabled={loading || saving}
             />
 
-            {file && !calendarLink && (
+            {file && !isSaved && (
               <div className="mt-4 flex items-center justify-between">
                 <p className="text-sm text-gray-500">
                   ไฟล์: <span className="font-medium text-gray-700">{file.name}</span>
@@ -174,10 +175,10 @@ export default function Home() {
               <EventForm
                 data={eventData}
                 onChange={setEventData}
-                disabled={saving || !!calendarLink}
+                disabled={saving || isSaved}
               />
 
-              {!calendarLink && (
+              {!isSaved && (
                 <div className="mt-6 flex items-center justify-between">
                   <button
                     onClick={handleReset}
@@ -204,7 +205,7 @@ export default function Home() {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                         </svg>
-                        บันทึกลงปฏิทิน
+                        บันทึกลงปฏิทิน{eventData.dates.length > 1 ? ` (${eventData.dates.length} กิจกรรม)` : ''}
                       </>
                     )}
                   </button>
@@ -214,7 +215,7 @@ export default function Home() {
           )}
 
           {/* Success */}
-          {calendarLink && (
+          {isSaved && (
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
                 <span className="flex items-center justify-center w-7 h-7 bg-green-600 text-white text-sm font-bold rounded-full">
@@ -222,24 +223,29 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                   </svg>
                 </span>
-                <h2 className="text-lg font-semibold text-green-700">บันทึกสำเร็จ!</h2>
+                <h2 className="text-lg font-semibold text-green-700">
+                  บันทึกสำเร็จ!{calendarLinks.length > 1 ? ` (${calendarLinks.length} กิจกรรม)` : ''}
+                </h2>
               </div>
 
-              <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+              <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4 space-y-2">
                 <p className="text-sm text-green-700 mb-3">
                   บันทึกนัดหมายลง Google Calendar เรียบร้อยแล้ว
                 </p>
-                <a
-                  href={calendarLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-green-300 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                  เปิดใน Google Calendar
-                </a>
+                {calendarLinks.map((link, index) => (
+                  <a
+                    key={index}
+                    href={link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-green-300 text-green-700 text-sm font-medium rounded-lg hover:bg-green-50 transition-colors"
+                  >
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    {calendarLinks.length > 1 ? `เปิดกิจกรรมที่ ${index + 1} ใน Google Calendar` : 'เปิดใน Google Calendar'}
+                  </a>
+                ))}
               </div>
 
               <button

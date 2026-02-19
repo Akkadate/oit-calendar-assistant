@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as line from '@line/bot-sdk'
 import { openai, EXTRACT_PROMPT, EventData } from '@/lib/openai'
-import { createCalendarEvent } from '@/lib/googleCalendar'
+import { createCalendarEvents } from '@/lib/googleCalendar'
 
 const channelSecret = process.env.LINE_CHANNEL_SECRET!
 const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN!
@@ -46,6 +46,29 @@ function formatThaiDateTime(isoString: string): string {
   return `${dateStr} ${timeStr} น.`
 }
 
+// Normalize AI response — handles both new format (dates array) and old flat format
+function normalizeEventData(raw: Record<string, unknown>): EventData {
+  if (raw.dates && Array.isArray(raw.dates) && raw.dates.length > 0) {
+    return {
+      title: (raw.title as string) ?? '',
+      dates: raw.dates as EventData['dates'],
+      location: (raw.location as string) ?? '',
+      description: (raw.description as string) ?? '',
+    }
+  }
+  return {
+    title: (raw.title as string) ?? '',
+    dates: [
+      {
+        startDateTime: (raw.startDateTime as string) ?? '',
+        endDateTime: (raw.endDateTime as string) ?? '',
+      },
+    ],
+    location: (raw.location as string) ?? '',
+    description: (raw.description as string) ?? '',
+  }
+}
+
 async function handleImageMessage(
   replyToken: string,
   messageId: string
@@ -70,9 +93,10 @@ async function handleImageMessage(
     })
 
     const content = response.choices[0].message.content ?? '{}'
-    const data: EventData = JSON.parse(content)
+    const raw = JSON.parse(content)
+    const data: EventData = normalizeEventData(raw)
 
-    if (!data.title || !data.startDateTime) {
+    if (!data.title || !data.dates || data.dates.length === 0 || !data.dates[0].startDateTime) {
       await client.replyMessage({
         replyToken,
         messages: [{ type: 'text', text: '⚠️ ไม่พบข้อมูลวันเวลาในเอกสาร\nกรุณาตรวจสอบภาพและลองใหม่อีกครั้ง' }],
@@ -80,27 +104,37 @@ async function handleImageMessage(
       return
     }
 
-    // 3. Save to Google Calendar
-    const calendarLink = await createCalendarEvent(data)
+    // 3. Save to Google Calendar (one event per date range)
+    const calendarLinks = await createCalendarEvents(data)
 
-    // 4. Reply with summary
-    const endTime = parseBangkokTime(data.endDateTime).toLocaleTimeString('th-TH', {
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'Asia/Bangkok',
+    // 4. Build date lines for reply
+    const dateLines = data.dates.map((dateRange, i) => {
+      const startFull = formatThaiDateTime(dateRange.startDateTime)
+      const endTime = parseBangkokTime(dateRange.endDateTime).toLocaleTimeString('th-TH', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Bangkok',
+      })
+      const prefix = data.dates.length > 1 ? `📅 วันที่ ${i + 1}: ` : '📅 '
+      return `${prefix}${startFull} - ${endTime} น.`
     })
-    const startFull = formatThaiDateTime(data.startDateTime)
+
+    const linkLines = calendarLinks.map((link, i) =>
+      data.dates.length > 1 ? `🔗 กิจกรรมที่ ${i + 1}: ${link}` : `🔗 ${link}`
+    )
+
+    const countText = data.dates.length > 1 ? ` (${data.dates.length} กิจกรรม)` : ''
 
     const lines = [
-      '✅ บันทึกลงปฏิทินแล้ว!',
+      `✅ บันทึกลงปฏิทินแล้ว!${countText}`,
       '',
       `📋 ${data.title}`,
-      `📅 ${startFull} - ${endTime} น.`,
+      ...dateLines,
       data.location ? `📍 ${data.location}` : null,
       data.description ? `📝 ${data.description.slice(0, 100)}${data.description.length > 100 ? '...' : ''}` : null,
       '',
       '✏️ ข้อมูลไม่ถูกต้อง? แก้ไขได้ที่ลิงก์ด้านล่าง',
-      `🔗 ${calendarLink}`,
+      ...linkLines,
     ].filter((l): l is string => l !== null)
 
     await client.replyMessage({

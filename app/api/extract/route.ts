@@ -1,6 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { openai, EXTRACT_PROMPT, EventData } from '@/lib/openai'
 
+// Normalize AI response — handles both new format (dates array) and old flat format
+function normalizeEventData(raw: Record<string, unknown>): EventData {
+  if (raw.dates && Array.isArray(raw.dates) && raw.dates.length > 0) {
+    return {
+      title: (raw.title as string) ?? '',
+      dates: raw.dates as EventData['dates'],
+      location: (raw.location as string) ?? '',
+      description: (raw.description as string) ?? '',
+    }
+  }
+  // Fallback: AI returned old flat format, convert to dates array
+  return {
+    title: (raw.title as string) ?? '',
+    dates: [
+      {
+        startDateTime: (raw.startDateTime as string) ?? '',
+        endDateTime: (raw.endDateTime as string) ?? '',
+      },
+    ],
+    location: (raw.location as string) ?? '',
+    description: (raw.description as string) ?? '',
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
@@ -48,7 +72,8 @@ export async function POST(req: NextRequest) {
     })
 
     const content = response.choices[0].message.content ?? '{}'
-    const data: EventData = JSON.parse(content)
+    const raw = JSON.parse(content)
+    const data: EventData = normalizeEventData(raw)
 
     return NextResponse.json(data)
   } catch (error) {

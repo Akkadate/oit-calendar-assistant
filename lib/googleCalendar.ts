@@ -15,19 +15,25 @@ export function getGoogleCalendarClient() {
   return google.calendar({ version: 'v3', auth })
 }
 
-export async function createCalendarEvent(data: EventData): Promise<string> {
+async function createSingleEvent(
+  title: string,
+  startDateTime: string,
+  endDateTime: string,
+  location: string,
+  description: string
+): Promise<string> {
   const calendar = getGoogleCalendarClient()
 
   const event = {
-    summary: data.title,
-    location: data.location,
-    description: data.description,
+    summary: title,
+    location,
+    description,
     start: {
-      dateTime: data.startDateTime,
+      dateTime: startDateTime,
       timeZone: 'Asia/Bangkok',
     },
     end: {
-      dateTime: data.endDateTime,
+      dateTime: endDateTime,
       timeZone: 'Asia/Bangkok',
     },
   }
@@ -40,4 +46,19 @@ export async function createCalendarEvent(data: EventData): Promise<string> {
   })
 
   return result.data.htmlLink ?? ''
+}
+
+export async function createCalendarEvents(data: EventData): Promise<string[]> {
+  const links: string[] = []
+  for (const dateRange of data.dates) {
+    const link = await createSingleEvent(
+      data.title,
+      dateRange.startDateTime,
+      dateRange.endDateTime,
+      data.location,
+      data.description
+    )
+    links.push(link)
+  }
+  return links
 }
