@@ -156,16 +156,23 @@ async function handleImageMessage(
       messages: [{ type: 'text', text: lines.join('\n') }],
     })
   } catch (error) {
-    console.error('Line webhook handleImageMessage error:', error)
-    await client.replyMessage({
-      replyToken,
-      messages: [
-        {
-          type: 'text',
-          text: '❌ เกิดข้อผิดพลาดในการประมวลผล\nกรุณาลองใหม่อีกครั้ง',
-        },
-      ],
-    })
+    const errMsg = error instanceof Error ? error.message : String(error)
+    const errStack = error instanceof Error ? error.stack : ''
+    console.error('Line webhook handleImageMessage error:', errMsg)
+    console.error('Stack:', errStack)
+    try {
+      await client.replyMessage({
+        replyToken,
+        messages: [
+          {
+            type: 'text',
+            text: `❌ เกิดข้อผิดพลาดในการประมวลผล\nกรุณาลองใหม่อีกครั้ง\n\nDebug: ${errMsg.slice(0, 200)}`,
+          },
+        ],
+      })
+    } catch {
+      console.error('Failed to send error reply to Line')
+    }
   }
 }
 
