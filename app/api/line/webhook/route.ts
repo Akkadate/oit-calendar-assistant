@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as line from '@line/bot-sdk'
 import { openai, EXTRACT_PROMPT, EventData } from '@/lib/openai'
 import { createCalendarEvents } from '@/lib/googleCalendar'
+import { uploadImageToDrive, DriveUploadResult } from '@/lib/googleDrive'
 
 const channelSecret = process.env.LINE_CHANNEL_SECRET!
 const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN!
@@ -76,23 +77,30 @@ async function handleImageMessage(
   try {
     // 1. Download image from Line
     const { base64, mimeType } = await downloadLineImage(messageId)
+    const imageBuffer = Buffer.from(base64, 'base64')
 
-    // 2. Extract event data via OpenAI
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4.1-mini',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: EXTRACT_PROMPT },
-            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
-          ],
-        },
-      ],
-      max_tokens: 1000,
-    })
+    // 2. Extract event data via OpenAI + Upload to Google Drive (parallel)
+    const [aiResponse, driveResult] = await Promise.all([
+      openai.chat.completions.create({
+        model: 'gpt-4.1-mini',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: EXTRACT_PROMPT },
+              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
+            ],
+          },
+        ],
+        max_tokens: 1000,
+      }),
+      uploadImageToDrive(imageBuffer, mimeType).catch((err) => {
+        console.error('Google Drive upload error (non-blocking):', err)
+        return null as DriveUploadResult | null
+      }),
+    ])
 
-    const content = response.choices[0].message.content ?? '{}'
+    const content = aiResponse.choices[0].message.content ?? '{}'
     const raw = JSON.parse(content)
     const data: EventData = normalizeEventData(raw)
 
@@ -125,6 +133,10 @@ async function handleImageMessage(
 
     const countText = data.dates.length > 1 ? ` (${data.dates.length} กิจกรรม)` : ''
 
+    const driveLink = driveResult?.webViewLink
+      ? `📁 เอกสารต้นฉบับ: ${driveResult.webViewLink}`
+      : null
+
     const lines = [
       `✅ บันทึกลงปฏิทินแล้ว!${countText}`,
       '',
@@ -132,6 +144,8 @@ async function handleImageMessage(
       ...dateLines,
       data.location ? `📍 ${data.location}` : null,
       data.description ? `📝 ${data.description.slice(0, 100)}${data.description.length > 100 ? '...' : ''}` : null,
+      '',
+      driveLink,
       '',
       '✏️ ข้อมูลไม่ถูกต้อง? แก้ไขได้ที่ลิงก์ด้านล่าง',
       ...linkLines,

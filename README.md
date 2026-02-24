@@ -126,6 +126,7 @@ Prompt ที่ส่งให้ GPT กำหนดกฎชัดเจน:
 | `GOOGLE_REFRESH_TOKEN` | `1//04k...` | Google OAuth2 Refresh Token (ถาวร) |
 | `GOOGLE_CALENDAR_ID` | `c_86ea...@group.calendar.google.com` | ID ปฏิทินปลายทาง |
 | `PASSKEY` | `nbu2026` | รหัสผ่านเข้าใช้งานระบบ |
+| `GOOGLE_DRIVE_FOLDER_ID` | `11HTrdJ-iRC...` | ID โฟลเดอร์ Google Drive สำหรับเก็บเอกสาร |
 
 ### วิธีขอ Google Refresh Token
 
