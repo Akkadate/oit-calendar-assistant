@@ -102,7 +102,7 @@ async function handleImageMessage(
 
     const content = aiResponse.choices[0].message.content ?? '{}'
     const raw = JSON.parse(content)
-    const data: EventData = normalizeEventData(raw)
+    let data: EventData = normalizeEventData(raw)
 
     if (!data.title || !data.dates || data.dates.length === 0 || !data.dates[0].startDateTime) {
       await client.replyMessage({
@@ -112,7 +112,13 @@ async function handleImageMessage(
       return
     }
 
-    // 3. Save to Google Calendar (one event per date range)
+    // 3. Append Drive link to description (if uploaded)
+    if (driveResult?.webViewLink) {
+      const driveNote = `\n\n📁 เอกสารต้นฉบับ: ${driveResult.webViewLink}`
+      data = { ...data, description: (data.description || '') + driveNote }
+    }
+
+    // 4. Save to Google Calendar (one event per date range)
     const calendarLinks = await createCalendarEvents(data)
 
     // 4. Build date lines for reply
