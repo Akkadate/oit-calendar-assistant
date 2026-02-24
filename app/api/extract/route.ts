@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { openai, EXTRACT_PROMPT, EventData } from '@/lib/openai'
+import { uploadImageToDrive } from '@/lib/googleDrive'
 
 // Normalize AI response — handles both new format (dates array) and old flat format
 function normalizeEventData(raw: Record<string, unknown>): EventData {
@@ -52,30 +53,41 @@ export async function POST(req: NextRequest) {
 
     const bytes = await file.arrayBuffer()
     const base64 = Buffer.from(bytes).toString('base64')
+    const imageBuffer = Buffer.from(bytes)
     const mimeType = file.type
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4.1-mini',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: EXTRACT_PROMPT },
-            {
-              type: 'image_url',
-              image_url: { url: `data:${mimeType};base64,${base64}` },
-            },
-          ],
-        },
-      ],
-      max_tokens: 1000,
-    })
+    // OpenAI extract + Google Drive upload (parallel)
+    const [aiResponse, driveResult] = await Promise.all([
+      openai.chat.completions.create({
+        model: 'gpt-4.1-mini',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: EXTRACT_PROMPT },
+              {
+                type: 'image_url',
+                image_url: { url: `data:${mimeType};base64,${base64}` },
+              },
+            ],
+          },
+        ],
+        max_tokens: 1000,
+      }),
+      uploadImageToDrive(imageBuffer, mimeType, `WEB_${file.name}`).catch((err) => {
+        console.error('Google Drive upload error (non-blocking):', err)
+        return null
+      }),
+    ])
 
-    const content = response.choices[0].message.content ?? '{}'
+    const content = aiResponse.choices[0].message.content ?? '{}'
     const raw = JSON.parse(content)
     const data: EventData = normalizeEventData(raw)
 
-    return NextResponse.json(data)
+    return NextResponse.json({
+      ...data,
+      driveLink: driveResult?.webViewLink ?? '',
+    })
   } catch (error) {
     console.error('Extract error:', error)
     if (error instanceof SyntaxError) {

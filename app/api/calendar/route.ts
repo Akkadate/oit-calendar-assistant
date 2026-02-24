@@ -4,7 +4,9 @@ import { EventData } from '@/lib/openai'
 
 export async function POST(req: NextRequest) {
   try {
-    const data: EventData = await req.json()
+    const body = await req.json()
+    const { driveLink, ...rest } = body
+    const data: EventData = rest
 
     if (!data.title || !data.dates || data.dates.length === 0) {
       return NextResponse.json(
@@ -28,6 +30,11 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         )
       }
+    }
+
+    // Append Drive link to description if available
+    if (driveLink) {
+      data.description = (data.description || '') + `\n\n📁 เอกสารต้นฉบับ: ${driveLink}`
     }
 
     const links = await createCalendarEvents(data)

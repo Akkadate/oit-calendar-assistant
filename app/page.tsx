@@ -19,6 +19,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [calendarLinks, setCalendarLinks] = useState<string[]>([])
+  const [driveLink, setDriveLink] = useState('')
   const [error, setError] = useState('')
 
   const handleFileSelect = (selectedFile: File, previewUrl: string) => {
@@ -26,6 +27,7 @@ export default function Home() {
     setPreview(previewUrl)
     setEventData(null)
     setCalendarLinks([])
+    setDriveLink('')
     setError('')
   }
 
@@ -51,6 +53,7 @@ export default function Home() {
       }
 
       setEventData(json)
+      setDriveLink(json.driveLink || '')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาด กรุณาลองใหม่')
     } finally {
@@ -67,7 +70,7 @@ export default function Home() {
       const res = await fetch('/api/calendar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(eventData),
+        body: JSON.stringify({ ...eventData, driveLink }),
       })
 
       const json = await res.json()
@@ -89,6 +92,7 @@ export default function Home() {
     setPreview('')
     setEventData(null)
     setCalendarLinks([])
+    setDriveLink('')
     setError('')
   }
 
